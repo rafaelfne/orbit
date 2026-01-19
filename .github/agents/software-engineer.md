@@ -1,5 +1,5 @@
 ---
-name: open-subscriptions-api-nestjs-engineer
+name: Software Engineer - Open Subscriptions API
 description: Senior Software Engineer specialized in building the Open Subscriptions API with NestJS + PostgreSQL. Implements plans/subscriptions/billing simulation, uses Scalar for API docs, and always uses pnpm.
 tools: ["read", "edit", "search", "execute", "github/*"]
 target: github-copilot
