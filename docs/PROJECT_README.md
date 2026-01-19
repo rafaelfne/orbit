@@ -10,10 +10,13 @@ The Orbit API provides functionality for managing subscription plans and billing
 
 ### Plans Management
 - Create subscription plans with pricing and billing cadence
+- List plans with pagination and currency conversion
+- Get individual plan by ID with optional currency conversion
 - Validation for plan data (name, price, currency, interval)
 - Unique plan names with conflict detection
 - Support for BRL and USD currencies (MVP)
 - Monthly billing intervals (MVP)
+- Deterministic currency conversion using stored exchange rates
 
 ### API Documentation
 - OpenAPI 3.0 specification at `/openapi.json`
@@ -112,6 +115,71 @@ Content-Type: application/json
 **Error Responses:**
 - `400 Bad Request` - Validation error
 - `409 Conflict` - Duplicate plan name
+
+#### List Plans
+```bash
+GET /plans?page=1&pageSize=20&currency=BRL
+```
+
+**Response (200 OK):**
+```json
+{
+  "items": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "name": "Premium Plan",
+      "priceCents": 51975,
+      "currency": "BRL",
+      "interval": "MONTHLY",
+      "createdAt": "2026-01-19T14:13:55.661Z",
+      "updatedAt": "2026-01-19T14:13:55.661Z",
+      "fx": {
+        "baseCurrency": "USD",
+        "quoteCurrency": "BRL",
+        "rate": "5.2500000000",
+        "asOf": "2026-01-19T14:00:00.000Z",
+        "originalPriceCents": 9900
+      }
+    }
+  ],
+  "page": 1,
+  "pageSize": 20,
+  "total": 1
+}
+```
+
+**Error Responses:**
+- `400 Bad Request` - Invalid query parameters
+- `422 Unprocessable Entity` - Missing exchange rate
+
+#### Get Plan by ID
+```bash
+GET /plans/:id?currency=BRL
+```
+
+**Response (200 OK):**
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "name": "Premium Plan",
+  "priceCents": 51975,
+  "currency": "BRL",
+  "interval": "MONTHLY",
+  "createdAt": "2026-01-19T14:13:55.661Z",
+  "updatedAt": "2026-01-19T14:13:55.661Z",
+  "fx": {
+    "baseCurrency": "USD",
+    "quoteCurrency": "BRL",
+    "rate": "5.2500000000",
+    "asOf": "2026-01-19T14:00:00.000Z",
+    "originalPriceCents": 9900
+  }
+}
+```
+
+**Error Responses:**
+- `404 Not Found` - Plan not found
+- `422 Unprocessable Entity` - Missing exchange rate
 
 ### Documentation
 
@@ -227,13 +295,12 @@ Detailed feature documentation is available in `docs/features/`:
 ## Roadmap
 
 Future enhancements planned:
-- [ ] List plans with pagination (GET /plans)
-- [ ] Get single plan (GET /plans/:id)
 - [ ] Update plan (PATCH /plans/:id)
 - [ ] Subscriptions management
 - [ ] Billing simulation
 - [ ] Additional currencies and intervals
 - [ ] Idempotency keys
+- [ ] Live FX provider integration
 
 ## License
 
