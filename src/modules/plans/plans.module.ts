@@ -3,9 +3,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { PlansController } from './plans.controller';
 import { PlansService } from './plans.service';
 import { Plan } from './plan.entity';
+import { FxRate } from './fx-rate.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Plan])],
+  imports: [TypeOrmModule.forFeature([Plan, FxRate])],
   controllers: [PlansController],
   providers: [PlansService],
   exports: [PlansService],
