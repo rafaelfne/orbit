@@ -1,0 +1,10 @@
+{
+  "name": "Orbit Development",
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": {
+      "label": "Application",
+      "onAutoForward": "notify"
+    }
+  }
+}
