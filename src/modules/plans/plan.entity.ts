@@ -4,7 +4,6 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
-  Index,
 } from 'typeorm';
 
 @Entity('plans')
@@ -13,7 +12,6 @@ export class Plan {
   id: string;
 
   @Column({ type: 'varchar', length: 80, unique: true })
-  @Index('idx_plans_name', { unique: true })
   name: string;
 
   @Column({ name: 'price_cents', type: 'int' })

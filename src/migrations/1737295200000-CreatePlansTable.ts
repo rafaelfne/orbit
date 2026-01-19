@@ -2,6 +2,9 @@ import { MigrationInterface, QueryRunner, Table } from 'typeorm';
 
 export class CreatePlansTable1737295200000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
+    // Enable uuid extension if not already enabled
+    await queryRunner.query('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";');
+
     await queryRunner.createTable(
       new Table({
         name: 'plans',
@@ -64,9 +67,6 @@ export class CreatePlansTable1737295200000 implements MigrationInterface {
       }),
       true,
     );
-
-    // Enable uuid extension if not already enabled
-    await queryRunner.query('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";');
 
     // Note: The unique index on name is already created via the isUnique: true
     // property in the column definition above
