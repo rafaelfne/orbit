@@ -1,98 +1,240 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Orbit - Open Subscriptions API
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+A production-grade Open Subscriptions API built with NestJS, TypeScript, and PostgreSQL.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Overview
 
-## Description
+The Orbit API provides functionality for managing subscription plans and billing. This is an MVP implementation focused on core subscription management features.
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Current Features
 
-## Project setup
+### Plans Management
+- Create subscription plans with pricing and billing cadence
+- Validation for plan data (name, price, currency, interval)
+- Unique plan names with conflict detection
+- Support for BRL and USD currencies (MVP)
+- Monthly billing intervals (MVP)
 
-```bash
-$ pnpm install
-```
+### API Documentation
+- OpenAPI 3.0 specification at `/openapi.json`
+- Interactive API documentation via Scalar at `/docs`
+- Full request/response schemas and examples
 
-## Compile and run the project
+## Tech Stack
 
-```bash
-# development
-$ pnpm run start
+- **Framework**: NestJS 11.x
+- **Language**: TypeScript 5.x
+- **Database**: PostgreSQL 16 (via Docker)
+- **ORM**: TypeORM 0.3.x
+- **Validation**: class-validator, class-transformer
+- **API Docs**: @nestjs/swagger, Scalar
+- **Testing**: Jest (unit + E2E)
+- **Package Manager**: pnpm
 
-# watch mode
-$ pnpm run start:dev
+## Project Setup
 
-# production mode
-$ pnpm run start:prod
-```
+### Prerequisites
+- Node.js 18+ 
+- pnpm
+- Docker (for PostgreSQL)
 
-## Run tests
+### Installation
 
 ```bash
-# unit tests
-$ pnpm run test
-
-# e2e tests
-$ pnpm run test:e2e
-
-# test coverage
-$ pnpm run test:cov
+pnpm install
 ```
 
-## Deployment
+### Database Setup
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+Start the PostgreSQL database:
 
 ```bash
-$ pnpm install -g mau
-$ mau deploy
+pnpm docker:up
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+Run migrations:
 
-## Resources
+```bash
+pnpm migration:run
+```
 
-Check out a few resources that may come in handy when working with NestJS:
+Other database commands:
+- `pnpm docker:down` - Stop database
+- `pnpm docker:logs` - View database logs
+- `pnpm docker:restart` - Restart database
+- `pnpm docker:clean` - Clean volumes (⚠️ deletes data)
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+## Running the Application
 
-## Support
+```bash
+# Development mode
+pnpm start:dev
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+# Production mode
+pnpm start:prod
 
-## Stay in touch
+# Build
+pnpm build
+```
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+The API will be available at `http://localhost:3000`
+
+## API Endpoints
+
+### Plans
+
+#### Create Plan
+```bash
+POST /plans
+Content-Type: application/json
+
+{
+  "name": "Premium Plan",
+  "priceCents": 9900,
+  "currency": "USD",
+  "interval": "MONTHLY"
+}
+```
+
+**Response (201 Created):**
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "name": "Premium Plan",
+  "priceCents": 9900,
+  "currency": "USD",
+  "interval": "MONTHLY",
+  "createdAt": "2026-01-19T14:13:55.661Z",
+  "updatedAt": "2026-01-19T14:13:55.661Z"
+}
+```
+
+**Error Responses:**
+- `400 Bad Request` - Validation error
+- `409 Conflict` - Duplicate plan name
+
+### Documentation
+
+- **OpenAPI Specification**: `GET /openapi.json`
+- **Interactive Docs (Scalar)**: `GET /docs`
+
+## Testing
+
+```bash
+# Unit tests
+pnpm test
+
+# E2E tests (requires database)
+pnpm test:e2e
+
+# Test coverage
+pnpm test:cov
+
+# Watch mode
+pnpm test:watch
+```
+
+## Code Quality
+
+```bash
+# Format code
+pnpm format
+
+# Lint code
+pnpm lint
+```
+
+## Database Migrations
+
+```bash
+# Run pending migrations
+pnpm migration:run
+
+# Revert last migration
+pnpm migration:revert
+```
+
+## Environment Variables
+
+The application supports the following environment variables:
+
+- `PORT` - API server port (default: 3000)
+- `DATABASE_HOST` - PostgreSQL host (default: localhost)
+- `DATABASE_PORT` - PostgreSQL port (default: 5432)
+- `DATABASE_USER` - PostgreSQL user (default: orbit)
+- `DATABASE_PASSWORD` - PostgreSQL password (default: orbit)
+- `DATABASE_NAME` - PostgreSQL database (default: orbit)
+- `NODE_ENV` - Environment (development/production)
+
+## Project Structure
+
+```
+src/
+├── config/              # Configuration files
+│   ├── database.config.ts
+│   └── typeorm.config.ts
+├── migrations/          # Database migrations
+├── modules/
+│   └── plans/          # Plans module
+│       ├── dto/        # Data Transfer Objects
+│       ├── plan.entity.ts
+│       ├── plans.controller.ts
+│       ├── plans.service.ts
+│       └── plans.module.ts
+├── app.module.ts       # Root module
+└── main.ts             # Application entry point
+
+test/
+├── *.e2e-spec.ts      # E2E tests
+└── jest-e2e.json      # E2E test config
+
+docs/
+└── features/          # Feature documentation
+    ├── plans.md
+    └── api-documentation.md
+```
+
+## Development Guidelines
+
+### NestJS-First Policy
+Always use NestJS built-in features and official modules before implementing custom solutions:
+- Validation: `ValidationPipe` + `class-validator`
+- Configuration: `@nestjs/config`
+- Database: `@nestjs/typeorm`
+- API Docs: `@nestjs/swagger`
+
+### Money Handling
+- Always use integer cents for monetary values
+- Never use floating-point for money calculations
+- Store as `int` in database
+
+### Timestamps
+- Use `timestamptz` for all timestamps
+- Store in UTC
+- Let database handle defaults with `CURRENT_TIMESTAMP`
+
+### Error Handling
+- Map database errors to appropriate HTTP exceptions
+- Never expose raw database errors to clients
+- Use consistent error response format
+
+## Documentation
+
+Detailed feature documentation is available in `docs/features/`:
+- [Plans](docs/features/plans.md) - Plans management
+- [API Documentation](docs/features/api-documentation.md) - OpenAPI and Scalar setup
+
+## Roadmap
+
+Future enhancements planned:
+- [ ] List plans with pagination (GET /plans)
+- [ ] Get single plan (GET /plans/:id)
+- [ ] Update plan (PATCH /plans/:id)
+- [ ] Subscriptions management
+- [ ] Billing simulation
+- [ ] Additional currencies and intervals
+- [ ] Idempotency keys
 
 ## License
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+UNLICENSED
