@@ -19,6 +19,20 @@ Package manager policy (mandatory)
 - Run scripts with: pnpm `<script>` (e.g., pnpm test, pnpm lint, pnpm format)
 - If a command in docs uses npm/yarn, translate it to pnpm before executing.
 
+Local database (PostgreSQL) — Docker commands (mandatory)
+- Use pnpm scripts to manage the local Postgres container. Do not run raw docker-compose commands unless the pnpm scripts are missing.
+- Commands:
+  - Start DB: `pnpm docker:up` (runs `docker-compose up -d`)
+  - Stop DB: `pnpm docker:down` (runs `docker-compose down`)
+  - Tail Postgres logs: `pnpm docker:logs` (runs `docker-compose logs -f postgres`)
+  - Restart services: `pnpm docker:restart` (runs `docker-compose restart`)
+  - Clean volumes (destructive): `pnpm docker:clean` (runs `docker-compose down -v`)
+- Before running migrations or e2e tests that depend on Postgres:
+  - Ensure DB is up: `pnpm docker:up`
+  - If tests/migrations fail due to stale state, use `pnpm docker:clean` and rerun `pnpm docker:up`
+- Never run `pnpm docker:clean` unless you explicitly call out that it deletes volumes/data and it is acceptable for the current task.
+
+
 NestJS-first policy (mandatory)
 - Always check whether NestJS already provides an official module, feature, or built-in mechanism for the requirement before building anything custom.
 - Do not implement a custom solution if NestJS offers first-class support or an official package that solves the same problem.
