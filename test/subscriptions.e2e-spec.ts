@@ -501,6 +501,9 @@ describe('Subscriptions (e2e)', () => {
       expect(subscription.canceledAt).not.toBeNull(); // Should remain set
 
       // Verify new period was created
+      if (!subscription.reactivatedAt) {
+        throw new Error('reactivatedAt should not be null');
+      }
       const reactivatedAt = new Date(subscription.reactivatedAt);
       const periodStart = new Date(subscription.currentPeriodStart);
       const periodEnd = new Date(subscription.currentPeriodEnd);

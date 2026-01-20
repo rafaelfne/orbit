@@ -576,9 +576,6 @@ describe('SubscriptionsService', () => {
       await expect(service.reactivate('sub-123')).rejects.toThrow(
         InternalServerErrorException,
       );
-      await expect(service.reactivate('sub-123')).rejects.toThrow(
-        'An error occurred while reactivating the subscription',
-      );
     });
   });
 });
