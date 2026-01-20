@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, SelectQueryBuilder } from 'typeorm';
 import {
   ConflictException,
   InternalServerErrorException,
@@ -10,6 +10,7 @@ import { SubscriptionsService } from './subscriptions.service';
 import { Subscription, SubscriptionStatus } from './subscription.entity';
 import { Plan } from '../plans/plan.entity';
 import { CreateSubscriptionDto } from './dto/create-subscription.dto';
+import { ComputedStatus } from './dto/computed-status.enum';
 
 describe('SubscriptionsService', () => {
   let service: SubscriptionsService;
@@ -36,6 +37,7 @@ describe('SubscriptionsService', () => {
             create: jest.fn(),
             save: jest.fn(),
             findOne: jest.fn(),
+            createQueryBuilder: jest.fn(),
           },
         },
         {
@@ -108,6 +110,7 @@ describe('SubscriptionsService', () => {
       expect(result.status).toBe(SubscriptionStatus.ACTIVE);
       expect(result.customerId).toBe(createDto.customerId);
       expect(result.planId).toBe(createDto.planId);
+      expect(result.computedStatus).toBeDefined();
     });
 
     it('should throw NotFoundException if plan does not exist', async () => {
@@ -193,6 +196,262 @@ describe('SubscriptionsService', () => {
       );
       await expect(service.create(createDto)).rejects.toThrow(
         'An error occurred while creating the subscription',
+      );
+    });
+  });
+
+  describe('computedStatus', () => {
+    it('should return CANCELED for canceled subscriptions', async () => {
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 30);
+
+      const canceledSubscription: Subscription = {
+        id: 'sub-123',
+        planId: 'plan-123',
+        customerId: 'customer-456',
+        status: SubscriptionStatus.CANCELED,
+        startDate: new Date('2024-01-01'),
+        currentPeriodStart: new Date('2024-01-01'),
+        currentPeriodEnd: futureDate,
+        canceledAt: new Date(),
+        reactivatedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        plan: mockPlan,
+      };
+
+      jest
+        .spyOn(subscriptionRepository, 'findOne')
+        .mockResolvedValue(canceledSubscription);
+
+      const result = await service.findById('sub-123');
+      expect(result.computedStatus).toBe(ComputedStatus.CANCELED);
+    });
+
+    it('should return ACTIVE for active subscriptions with non-expired periods', async () => {
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 30);
+
+      const activeSubscription: Subscription = {
+        id: 'sub-123',
+        planId: 'plan-123',
+        customerId: 'customer-456',
+        status: SubscriptionStatus.ACTIVE,
+        startDate: new Date('2024-01-01'),
+        currentPeriodStart: new Date('2024-01-01'),
+        currentPeriodEnd: futureDate,
+        canceledAt: null,
+        reactivatedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        plan: mockPlan,
+      };
+
+      jest
+        .spyOn(subscriptionRepository, 'findOne')
+        .mockResolvedValue(activeSubscription);
+
+      const result = await service.findById('sub-123');
+      expect(result.computedStatus).toBe(ComputedStatus.ACTIVE);
+    });
+
+    it('should return OVERDUE for active subscriptions with expired periods', async () => {
+      const pastDate = new Date();
+      pastDate.setDate(pastDate.getDate() - 5);
+
+      const overdueSubscription: Subscription = {
+        id: 'sub-123',
+        planId: 'plan-123',
+        customerId: 'customer-456',
+        status: SubscriptionStatus.ACTIVE,
+        startDate: new Date('2024-01-01'),
+        currentPeriodStart: new Date('2024-01-01'),
+        currentPeriodEnd: pastDate,
+        canceledAt: null,
+        reactivatedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        plan: mockPlan,
+      };
+
+      jest
+        .spyOn(subscriptionRepository, 'findOne')
+        .mockResolvedValue(overdueSubscription);
+
+      const result = await service.findById('sub-123');
+      expect(result.computedStatus).toBe(ComputedStatus.OVERDUE);
+    });
+  });
+
+  describe('findAll', () => {
+    it('should return paginated subscriptions', async () => {
+      const mockSubscriptions: Subscription[] = [
+        {
+          id: 'sub-1',
+          planId: 'plan-123',
+          customerId: 'customer-1',
+          status: SubscriptionStatus.ACTIVE,
+          startDate: new Date('2024-01-01'),
+          currentPeriodStart: new Date('2024-01-01'),
+          currentPeriodEnd: new Date('2024-02-01'),
+          canceledAt: null,
+          reactivatedAt: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          plan: mockPlan,
+        },
+        {
+          id: 'sub-2',
+          planId: 'plan-123',
+          customerId: 'customer-2',
+          status: SubscriptionStatus.ACTIVE,
+          startDate: new Date('2024-01-02'),
+          currentPeriodStart: new Date('2024-01-02'),
+          currentPeriodEnd: new Date('2024-02-02'),
+          canceledAt: null,
+          reactivatedAt: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          plan: mockPlan,
+        },
+      ];
+
+      const mockQueryBuilder = {
+        orderBy: jest.fn().mockReturnThis(),
+        skip: jest.fn().mockReturnThis(),
+        take: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        getManyAndCount: jest
+          .fn()
+          .mockResolvedValue([mockSubscriptions, mockSubscriptions.length]),
+      } as unknown as SelectQueryBuilder<Subscription>;
+
+      jest
+        .spyOn(subscriptionRepository, 'createQueryBuilder')
+        .mockReturnValue(mockQueryBuilder);
+
+      const result = await service.findAll(1, 20);
+
+      expect(result.items).toHaveLength(2);
+      expect(result.page).toBe(1);
+      expect(result.pageSize).toBe(20);
+      expect(result.total).toBe(2);
+      expect(result.items[0].computedStatus).toBeDefined();
+    });
+
+    it('should filter by customerId when provided', async () => {
+      const mockSubscriptions: Subscription[] = [
+        {
+          id: 'sub-1',
+          planId: 'plan-123',
+          customerId: 'customer-1',
+          status: SubscriptionStatus.ACTIVE,
+          startDate: new Date('2024-01-01'),
+          currentPeriodStart: new Date('2024-01-01'),
+          currentPeriodEnd: new Date('2024-02-01'),
+          canceledAt: null,
+          reactivatedAt: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          plan: mockPlan,
+        },
+      ];
+
+      const mockQueryBuilder = {
+        orderBy: jest.fn().mockReturnThis(),
+        skip: jest.fn().mockReturnThis(),
+        take: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        getManyAndCount: jest
+          .fn()
+          .mockResolvedValue([mockSubscriptions, mockSubscriptions.length]),
+      } as unknown as SelectQueryBuilder<Subscription>;
+
+      jest
+        .spyOn(subscriptionRepository, 'createQueryBuilder')
+        .mockReturnValue(mockQueryBuilder);
+
+      const result = await service.findAll(1, 20, 'customer-1');
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(mockQueryBuilder.where).toHaveBeenCalledWith(
+        'subscription.customerId = :customerId',
+        { customerId: 'customer-1' },
+      );
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].customerId).toBe('customer-1');
+    });
+
+    it('should throw InternalServerErrorException on database error', async () => {
+      const mockQueryBuilder = {
+        orderBy: jest.fn().mockReturnThis(),
+        skip: jest.fn().mockReturnThis(),
+        take: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        getManyAndCount: jest
+          .fn()
+          .mockRejectedValue(new Error('Database error')),
+      } as unknown as SelectQueryBuilder<Subscription>;
+
+      jest
+        .spyOn(subscriptionRepository, 'createQueryBuilder')
+        .mockReturnValue(mockQueryBuilder);
+
+      await expect(service.findAll(1, 20)).rejects.toThrow(
+        InternalServerErrorException,
+      );
+    });
+  });
+
+  describe('findById', () => {
+    it('should return subscription by id', async () => {
+      const mockSubscription: Subscription = {
+        id: 'sub-123',
+        planId: 'plan-123',
+        customerId: 'customer-456',
+        status: SubscriptionStatus.ACTIVE,
+        startDate: new Date('2024-01-01'),
+        currentPeriodStart: new Date('2024-01-01'),
+        currentPeriodEnd: new Date('2024-02-01'),
+        canceledAt: null,
+        reactivatedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        plan: mockPlan,
+      };
+
+      jest
+        .spyOn(subscriptionRepository, 'findOne')
+        .mockResolvedValue(mockSubscription);
+
+      const result = await service.findById('sub-123');
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(subscriptionRepository.findOne).toHaveBeenCalledWith({
+        where: { id: 'sub-123' },
+      });
+      expect(result.id).toBe('sub-123');
+      expect(result.computedStatus).toBeDefined();
+    });
+
+    it('should throw NotFoundException if subscription does not exist', async () => {
+      jest.spyOn(subscriptionRepository, 'findOne').mockResolvedValue(null);
+
+      await expect(service.findById('non-existent')).rejects.toThrow(
+        NotFoundException,
+      );
+      await expect(service.findById('non-existent')).rejects.toThrow(
+        'Subscription with id non-existent not found',
+      );
+    });
+
+    it('should throw InternalServerErrorException on database error', async () => {
+      jest
+        .spyOn(subscriptionRepository, 'findOne')
+        .mockRejectedValue(new Error('Database error'));
+
+      await expect(service.findById('sub-123')).rejects.toThrow(
+        InternalServerErrorException,
       );
     });
   });
