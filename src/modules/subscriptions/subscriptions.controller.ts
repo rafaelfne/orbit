@@ -1,8 +1,19 @@
-import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  HttpCode,
+  HttpStatus,
+  Get,
+  Param,
+  Query,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { SubscriptionsService } from './subscriptions.service';
 import { CreateSubscriptionDto } from './dto/create-subscription.dto';
 import { SubscriptionResponseDto } from './dto/subscription-response.dto';
+import { ListSubscriptionsQueryDto } from './dto/list-subscriptions-query.dto';
+import { PaginatedSubscriptionsResponseDto } from './dto/paginated-subscriptions-response.dto';
 
 @ApiTags('subscriptions')
 @Controller('subscriptions')
@@ -38,5 +49,51 @@ export class SubscriptionsController {
     @Body() createSubscriptionDto: CreateSubscriptionDto,
   ): Promise<SubscriptionResponseDto> {
     return this.subscriptionsService.create(createSubscriptionDto);
+  }
+
+  @Get()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'List all subscriptions with pagination',
+    description:
+      'Returns a paginated list of subscriptions. Each subscription includes a computed status (ACTIVE, OVERDUE, or CANCELED) derived at read-time.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Subscriptions retrieved successfully',
+    type: PaginatedSubscriptionsResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - validation error',
+  })
+  async findAll(
+    @Query() query: ListSubscriptionsQueryDto,
+  ): Promise<PaginatedSubscriptionsResponseDto> {
+    return this.subscriptionsService.findAll(
+      query.page,
+      query.pageSize,
+      query.customerId,
+    );
+  }
+
+  @Get(':id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get a subscription by ID',
+    description:
+      'Returns a subscription by ID. The response includes a computed status (ACTIVE, OVERDUE, or CANCELED) derived at read-time.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Subscription retrieved successfully',
+    type: SubscriptionResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Subscription not found',
+  })
+  async findById(@Param('id') id: string): Promise<SubscriptionResponseDto> {
+    return this.subscriptionsService.findById(id);
   }
 }

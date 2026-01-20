@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { SubscriptionStatus } from '../subscription.entity';
+import { ComputedStatus } from './computed-status.enum';
 
 export class SubscriptionResponseDto {
   @ApiProperty({
@@ -21,11 +22,19 @@ export class SubscriptionResponseDto {
   customerId: string;
 
   @ApiProperty({
-    description: 'Subscription status',
+    description: 'Subscription status (persisted)',
     enum: SubscriptionStatus,
     example: SubscriptionStatus.ACTIVE,
   })
   status: SubscriptionStatus;
+
+  @ApiProperty({
+    description:
+      'Computed status (derived at read-time): ACTIVE (not expired), OVERDUE (expired, no payment), or CANCELED',
+    enum: ComputedStatus,
+    example: ComputedStatus.ACTIVE,
+  })
+  computedStatus: ComputedStatus;
 
   @ApiProperty({
     description: 'Start date of the subscription',

@@ -11,6 +11,8 @@ import { Subscription, SubscriptionStatus } from './subscription.entity';
 import { Plan } from '../plans/plan.entity';
 import { CreateSubscriptionDto } from './dto/create-subscription.dto';
 import { SubscriptionResponseDto } from './dto/subscription-response.dto';
+import { ComputedStatus } from './dto/computed-status.enum';
+import { PaginatedSubscriptionsResponseDto } from './dto/paginated-subscriptions-response.dto';
 
 @Injectable()
 export class SubscriptionsService {
@@ -95,11 +97,113 @@ export class SubscriptionsService {
     }
   }
 
+  async findAll(
+    page: number = 1,
+    pageSize: number = 20,
+    customerId?: string,
+  ): Promise<PaginatedSubscriptionsResponseDto> {
+    try {
+      const skip = (page - 1) * pageSize;
+      const take = pageSize;
+
+      // Build query
+      const queryBuilder = this.subscriptionRepository
+        .createQueryBuilder('subscription')
+        .orderBy('subscription.createdAt', 'DESC')
+        .skip(skip)
+        .take(take);
+
+      // Apply customerId filter if provided
+      if (customerId) {
+        queryBuilder.where('subscription.customerId = :customerId', {
+          customerId,
+        });
+      }
+
+      // Execute query
+      const [subscriptions, total] = await queryBuilder.getManyAndCount();
+
+      // Convert to response DTOs with computed status
+      const items = subscriptions.map((subscription) =>
+        this.toResponseDto(subscription),
+      );
+
+      return {
+        items,
+        page,
+        pageSize,
+        total,
+      };
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      this.logger.error(
+        `Failed to list subscriptions: ${errorMessage}`,
+        errorStack,
+      );
+      throw new InternalServerErrorException(
+        'An error occurred while listing subscriptions',
+      );
+    }
+  }
+
+  async findById(id: string): Promise<SubscriptionResponseDto> {
+    try {
+      const subscription = await this.subscriptionRepository.findOne({
+        where: { id },
+      });
+
+      if (!subscription) {
+        throw new NotFoundException(`Subscription with id ${id} not found`);
+      }
+
+      return this.toResponseDto(subscription);
+    } catch (error: unknown) {
+      // Re-throw if it's already an HTTP exception
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      this.logger.error(
+        `Failed to get subscription: ${errorMessage}`,
+        errorStack,
+      );
+      throw new InternalServerErrorException(
+        'An error occurred while getting the subscription',
+      );
+    }
+  }
+
   private addOneMonth(date: Date): Date {
     const result = new Date(date);
     // Add one month, handling month boundaries correctly
     result.setMonth(result.getMonth() + 1);
     return result;
+  }
+
+  private computeStatus(subscription: Subscription): ComputedStatus {
+    // If subscription is canceled, return CANCELED
+    if (subscription.status === SubscriptionStatus.CANCELED) {
+      return ComputedStatus.CANCELED;
+    }
+
+    // For ACTIVE subscriptions, check if period has ended
+    const now = new Date();
+    const periodEnd = new Date(subscription.currentPeriodEnd);
+
+    // If current period has not ended, subscription is ACTIVE
+    if (periodEnd >= now) {
+      return ComputedStatus.ACTIVE;
+    }
+
+    // Period has ended - since no billing entity exists yet,
+    // treat as OVERDUE (no payment for expired period)
+    // This follows Option A from the PRD: treat as missing payment => OVERDUE
+    return ComputedStatus.OVERDUE;
   }
 
   private toResponseDto(subscription: Subscription): SubscriptionResponseDto {
@@ -108,6 +212,7 @@ export class SubscriptionsService {
       planId: subscription.planId,
       customerId: subscription.customerId,
       status: subscription.status,
+      computedStatus: this.computeStatus(subscription),
       startDate: subscription.startDate,
       currentPeriodStart: subscription.currentPeriodStart,
       currentPeriodEnd: subscription.currentPeriodEnd,

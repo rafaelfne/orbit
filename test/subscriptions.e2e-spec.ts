@@ -10,6 +10,7 @@ interface SubscriptionResponse {
   planId: string;
   customerId: string;
   status: string;
+  computedStatus: string;
   startDate: string;
   currentPeriodStart: string;
   currentPeriodEnd: string;
@@ -94,6 +95,7 @@ describe('Subscriptions (e2e)', () => {
       expect(subscription.planId).toBe(testPlanId);
       expect(subscription.customerId).toBe('customer-123');
       expect(subscription.status).toBe('ACTIVE');
+      expect(subscription.computedStatus).toBe('ACTIVE');
       expect(subscription.canceledAt).toBeNull();
       expect(subscription.reactivatedAt).toBeNull();
 
@@ -207,6 +209,228 @@ describe('Subscriptions (e2e)', () => {
           customerId: longCustomerId,
         })
         .expect(400);
+    });
+  });
+
+  describe('GET /subscriptions', () => {
+    beforeEach(async () => {
+      // Create a test plan
+      const planResponse = await request(app.getHttpServer())
+        .post('/plans')
+        .send({
+          name: 'Test Plan',
+          priceCents: 9900,
+          currency: 'USD',
+        })
+        .expect(201);
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+      testPlanId = planResponse.body.id;
+    });
+
+    it('should return paginated subscriptions', async () => {
+      // Create multiple subscriptions
+      await request(app.getHttpServer())
+        .post('/subscriptions')
+        .send({
+          planId: testPlanId,
+          customerId: 'customer-1',
+        })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post('/subscriptions')
+        .send({
+          planId: testPlanId,
+          customerId: 'customer-2',
+        })
+        .expect(201);
+
+      const response = await request(app.getHttpServer())
+        .get('/subscriptions')
+        .expect(200);
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const data = response.body;
+
+      expect(data).toHaveProperty('items');
+
+      expect(data).toHaveProperty('page');
+
+      expect(data).toHaveProperty('pageSize');
+
+      expect(data).toHaveProperty('total');
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      expect(Array.isArray(data.items)).toBe(true);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      expect(data.items.length).toBe(2);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      expect(data.total).toBe(2);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      expect(data.page).toBe(1);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      expect(data.pageSize).toBe(20);
+
+      // Verify each subscription has computedStatus
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
+      data.items.forEach((item: SubscriptionResponse) => {
+        expect(item).toHaveProperty('computedStatus');
+        expect(['ACTIVE', 'OVERDUE', 'CANCELED']).toContain(
+          item.computedStatus,
+        );
+      });
+    });
+
+    it('should filter subscriptions by customerId', async () => {
+      // Create subscriptions for different customers
+      await request(app.getHttpServer())
+        .post('/subscriptions')
+        .send({
+          planId: testPlanId,
+          customerId: 'customer-filter-1',
+        })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post('/subscriptions')
+        .send({
+          planId: testPlanId,
+          customerId: 'customer-filter-2',
+        })
+        .expect(201);
+
+      const response = await request(app.getHttpServer())
+        .get('/subscriptions?customerId=customer-filter-1')
+        .expect(200);
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const data = response.body;
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      expect(data.items.length).toBe(1);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      expect(data.total).toBe(1);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      expect(data.items[0].customerId).toBe('customer-filter-1');
+    });
+
+    it('should respect pagination parameters', async () => {
+      // Create multiple subscriptions
+      for (let i = 1; i <= 3; i++) {
+        await request(app.getHttpServer())
+          .post('/subscriptions')
+          .send({
+            planId: testPlanId,
+            customerId: `customer-page-${i}`,
+          })
+          .expect(201);
+      }
+
+      // Get first page with pageSize=2
+      const response = await request(app.getHttpServer())
+        .get('/subscriptions?page=1&pageSize=2')
+        .expect(200);
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const data = response.body;
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      expect(data.items.length).toBe(2);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      expect(data.page).toBe(1);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      expect(data.pageSize).toBe(2);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      expect(data.total).toBe(3);
+    });
+
+    it('should return 400 for invalid pagination parameters', async () => {
+      await request(app.getHttpServer())
+        .get('/subscriptions?page=0')
+        .expect(400);
+
+      await request(app.getHttpServer())
+        .get('/subscriptions?pageSize=101')
+        .expect(400);
+    });
+  });
+
+  describe('GET /subscriptions/:id', () => {
+    let subscriptionId: string;
+
+    beforeEach(async () => {
+      // Create a test plan
+      const planResponse = await request(app.getHttpServer())
+        .post('/plans')
+        .send({
+          name: 'Test Plan',
+          priceCents: 9900,
+          currency: 'USD',
+        })
+        .expect(201);
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+      testPlanId = planResponse.body.id;
+
+      // Create a subscription
+      const subResponse = await request(app.getHttpServer())
+        .post('/subscriptions')
+        .send({
+          planId: testPlanId,
+          customerId: 'customer-detail',
+        })
+        .expect(201);
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+      subscriptionId = subResponse.body.id;
+    });
+
+    it('should return subscription by id', async () => {
+      const response = await request(app.getHttpServer())
+        .get(`/subscriptions/${subscriptionId}`)
+        .expect(200);
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const subscription: SubscriptionResponse = response.body;
+
+      expect(subscription.id).toBe(subscriptionId);
+      expect(subscription.planId).toBe(testPlanId);
+      expect(subscription.customerId).toBe('customer-detail');
+      expect(subscription.status).toBe('ACTIVE');
+      expect(subscription.computedStatus).toBe('ACTIVE');
+      expect(subscription).toHaveProperty('startDate');
+      expect(subscription).toHaveProperty('currentPeriodStart');
+      expect(subscription).toHaveProperty('currentPeriodEnd');
+      expect(subscription).toHaveProperty('createdAt');
+      expect(subscription).toHaveProperty('updatedAt');
+    });
+
+    it('should return 404 for non-existent subscription', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/subscriptions/00000000-0000-0000-0000-000000000000')
+        .expect(404);
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      expect(response.body.message).toContain('not found');
+    });
+
+    it('should compute OVERDUE status for expired subscriptions', async () => {
+      // Update subscription to have expired period
+      // This requires direct database access since we don't have an update endpoint yet
+      await dataSource.query(
+        `UPDATE subscriptions SET current_period_end = $1 WHERE id = $2`,
+        [new Date(Date.now() - 86400000 * 5), subscriptionId], // 5 days ago
+      );
+
+      const response = await request(app.getHttpServer())
+        .get(`/subscriptions/${subscriptionId}`)
+        .expect(200);
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const subscription: SubscriptionResponse = response.body;
+
+      expect(subscription.status).toBe('ACTIVE');
+      expect(subscription.computedStatus).toBe('OVERDUE');
     });
   });
 });
