@@ -417,9 +417,12 @@ describe('Subscriptions (e2e)', () => {
     it('should compute OVERDUE status for expired subscriptions', async () => {
       // Update subscription to have expired period
       // This requires direct database access since we don't have an update endpoint yet
+      const pastStart = new Date(Date.now() - 86400000 * 35); // 35 days ago
+      const pastEnd = new Date(Date.now() - 86400000 * 5); // 5 days ago
+
       await dataSource.query(
-        `UPDATE subscriptions SET current_period_end = $1 WHERE id = $2`,
-        [new Date(Date.now() - 86400000 * 5), subscriptionId], // 5 days ago
+        `UPDATE subscriptions SET current_period_start = $1, current_period_end = $2 WHERE id = $3`,
+        [pastStart, pastEnd, subscriptionId],
       );
 
       const response = await request(app.getHttpServer())
