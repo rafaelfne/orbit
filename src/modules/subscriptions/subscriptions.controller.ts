@@ -96,4 +96,28 @@ export class SubscriptionsController {
   async findById(@Param('id') id: string): Promise<SubscriptionResponseDto> {
     return this.subscriptionsService.findById(id);
   }
+
+  @Post(':id/cancel')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Cancel a subscription',
+    description:
+      'Cancels a subscription immediately. Sets status to CANCELED and records canceledAt timestamp. Returns 409 if subscription is already canceled.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Subscription canceled successfully',
+    type: SubscriptionResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Subscription not found',
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Subscription is already canceled',
+  })
+  async cancel(@Param('id') id: string): Promise<SubscriptionResponseDto> {
+    return this.subscriptionsService.cancel(id);
+  }
 }

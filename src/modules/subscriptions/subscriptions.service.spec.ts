@@ -455,4 +455,154 @@ describe('SubscriptionsService', () => {
       );
     });
   });
+
+  describe('cancel', () => {
+    it('should cancel an ACTIVE subscription', async () => {
+      const mockSubscription: Subscription = {
+        id: 'sub-123',
+        planId: 'plan-123',
+        customerId: 'customer-456',
+        status: SubscriptionStatus.ACTIVE,
+        startDate: new Date('2024-01-01'),
+        currentPeriodStart: new Date('2024-01-01'),
+        currentPeriodEnd: new Date('2024-02-01'),
+        canceledAt: null,
+        reactivatedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        plan: mockPlan,
+      };
+
+      const canceledSubscription: Subscription = {
+        ...mockSubscription,
+        status: SubscriptionStatus.CANCELED,
+        canceledAt: new Date(),
+      };
+
+      jest
+        .spyOn(subscriptionRepository, 'findOne')
+        .mockResolvedValue(mockSubscription);
+      jest
+        .spyOn(subscriptionRepository, 'save')
+        .mockResolvedValue(canceledSubscription);
+
+      const result = await service.cancel('sub-123');
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(subscriptionRepository.findOne).toHaveBeenCalledWith({
+        where: { id: 'sub-123' },
+      });
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(subscriptionRepository.save).toHaveBeenCalled();
+      expect(result.status).toBe(SubscriptionStatus.CANCELED);
+      expect(result.computedStatus).toBe(ComputedStatus.CANCELED);
+      expect(result.canceledAt).toBeDefined();
+      expect(result.canceledAt).not.toBeNull();
+    });
+
+    it('should not modify period fields when canceling', async () => {
+      const periodStart = new Date('2024-01-01');
+      const periodEnd = new Date('2024-02-01');
+
+      const mockSubscription: Subscription = {
+        id: 'sub-123',
+        planId: 'plan-123',
+        customerId: 'customer-456',
+        status: SubscriptionStatus.ACTIVE,
+        startDate: new Date('2024-01-01'),
+        currentPeriodStart: periodStart,
+        currentPeriodEnd: periodEnd,
+        canceledAt: null,
+        reactivatedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        plan: mockPlan,
+      };
+
+      const canceledSubscription: Subscription = {
+        ...mockSubscription,
+        status: SubscriptionStatus.CANCELED,
+        canceledAt: new Date(),
+      };
+
+      jest
+        .spyOn(subscriptionRepository, 'findOne')
+        .mockResolvedValue(mockSubscription);
+      jest
+        .spyOn(subscriptionRepository, 'save')
+        .mockResolvedValue(canceledSubscription);
+
+      const result = await service.cancel('sub-123');
+
+      expect(result.currentPeriodStart).toEqual(periodStart);
+      expect(result.currentPeriodEnd).toEqual(periodEnd);
+    });
+
+    it('should throw ConflictException if subscription is already canceled', async () => {
+      const mockSubscription: Subscription = {
+        id: 'sub-123',
+        planId: 'plan-123',
+        customerId: 'customer-456',
+        status: SubscriptionStatus.CANCELED,
+        startDate: new Date('2024-01-01'),
+        currentPeriodStart: new Date('2024-01-01'),
+        currentPeriodEnd: new Date('2024-02-01'),
+        canceledAt: new Date(),
+        reactivatedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        plan: mockPlan,
+      };
+
+      jest
+        .spyOn(subscriptionRepository, 'findOne')
+        .mockResolvedValue(mockSubscription);
+
+      await expect(service.cancel('sub-123')).rejects.toThrow(
+        ConflictException,
+      );
+      await expect(service.cancel('sub-123')).rejects.toThrow(
+        'Subscription is already canceled',
+      );
+    });
+
+    it('should throw NotFoundException if subscription does not exist', async () => {
+      jest.spyOn(subscriptionRepository, 'findOne').mockResolvedValue(null);
+
+      await expect(service.cancel('non-existent')).rejects.toThrow(
+        NotFoundException,
+      );
+      await expect(service.cancel('non-existent')).rejects.toThrow(
+        'Subscription with id non-existent not found',
+      );
+    });
+
+    it('should throw InternalServerErrorException on database error', async () => {
+      const mockSubscription: Subscription = {
+        id: 'sub-123',
+        planId: 'plan-123',
+        customerId: 'customer-456',
+        status: SubscriptionStatus.ACTIVE,
+        startDate: new Date('2024-01-01'),
+        currentPeriodStart: new Date('2024-01-01'),
+        currentPeriodEnd: new Date('2024-02-01'),
+        canceledAt: null,
+        reactivatedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        plan: mockPlan,
+      };
+
+      jest
+        .spyOn(subscriptionRepository, 'findOne')
+        .mockResolvedValue(mockSubscription);
+      jest
+        .spyOn(subscriptionRepository, 'save')
+        .mockRejectedValue(new Error('Database error'));
+
+      await expect(service.cancel('sub-123')).rejects.toThrow(
+        InternalServerErrorException,
+      );
+    });
+  });
 });

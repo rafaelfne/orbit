@@ -436,4 +436,97 @@ describe('Subscriptions (e2e)', () => {
       expect(subscription.computedStatus).toBe('OVERDUE');
     });
   });
+
+  describe('POST /subscriptions/:id/cancel', () => {
+    let subscriptionId: string;
+
+    beforeEach(async () => {
+      // Create a test plan
+      const planResponse = await request(app.getHttpServer())
+        .post('/plans')
+        .send({
+          name: 'Test Plan',
+          priceCents: 9900,
+          currency: 'USD',
+        })
+        .expect(201);
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+      testPlanId = planResponse.body.id;
+
+      // Create a subscription
+      const subResponse = await request(app.getHttpServer())
+        .post('/subscriptions')
+        .send({
+          planId: testPlanId,
+          customerId: 'customer-cancel',
+        })
+        .expect(201);
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+      subscriptionId = subResponse.body.id;
+    });
+
+    it('should cancel an ACTIVE subscription', async () => {
+      const response = await request(app.getHttpServer())
+        .post(`/subscriptions/${subscriptionId}/cancel`)
+        .expect(200);
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const subscription: SubscriptionResponse = response.body;
+
+      expect(subscription.id).toBe(subscriptionId);
+      expect(subscription.status).toBe('CANCELED');
+      expect(subscription.computedStatus).toBe('CANCELED');
+      expect(subscription.canceledAt).not.toBeNull();
+      expect(subscription.canceledAt).toBeDefined();
+
+      // Verify period fields are unchanged
+      expect(subscription.currentPeriodStart).toBeDefined();
+      expect(subscription.currentPeriodEnd).toBeDefined();
+    });
+
+    it('should return 409 when canceling an already canceled subscription', async () => {
+      // Cancel the subscription first time
+      await request(app.getHttpServer())
+        .post(`/subscriptions/${subscriptionId}/cancel`)
+        .expect(200);
+
+      // Try to cancel again
+      const response = await request(app.getHttpServer())
+        .post(`/subscriptions/${subscriptionId}/cancel`)
+        .expect(409);
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      expect(response.body.message).toContain('already canceled');
+    });
+
+    it('should return 404 for non-existent subscription', async () => {
+      const response = await request(app.getHttpServer())
+        .post('/subscriptions/00000000-0000-0000-0000-000000000000/cancel')
+        .expect(404);
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      expect(response.body.message).toContain('not found');
+    });
+
+    it('should persist the canceled status in the database', async () => {
+      // Cancel the subscription
+      await request(app.getHttpServer())
+        .post(`/subscriptions/${subscriptionId}/cancel`)
+        .expect(200);
+
+      // Fetch the subscription again to verify persistence
+      const response = await request(app.getHttpServer())
+        .get(`/subscriptions/${subscriptionId}`)
+        .expect(200);
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const subscription: SubscriptionResponse = response.body;
+
+      expect(subscription.status).toBe('CANCELED');
+      expect(subscription.computedStatus).toBe('CANCELED');
+      expect(subscription.canceledAt).not.toBeNull();
+    });
+  });
 });
