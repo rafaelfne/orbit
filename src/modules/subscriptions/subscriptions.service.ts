@@ -178,6 +178,61 @@ export class SubscriptionsService {
     }
   }
 
+  async reactivate(id: string): Promise<SubscriptionResponseDto> {
+    try {
+      // 1. Find subscription
+      const subscription = await this.subscriptionRepository.findOne({
+        where: { id },
+      });
+
+      if (!subscription) {
+        throw new NotFoundException(`Subscription with id ${id} not found`);
+      }
+
+      // 2. Check if already active
+      if (subscription.status === SubscriptionStatus.ACTIVE) {
+        throw new ConflictException('Subscription is already active');
+      }
+
+      // 3. Reactivate subscription
+      const now = new Date();
+      const newPeriodEnd = this.addOneMonth(now);
+
+      subscription.status = SubscriptionStatus.ACTIVE;
+      subscription.reactivatedAt = now;
+      subscription.currentPeriodStart = now;
+      subscription.currentPeriodEnd = newPeriodEnd;
+
+      const savedSubscription =
+        await this.subscriptionRepository.save(subscription);
+
+      this.logger.log(
+        `Subscription reactivated: id=${savedSubscription.id}, customerId=${subscription.customerId}, planId=${subscription.planId}, reactivatedAt=${now.toISOString()}, periodStart=${now.toISOString()}, periodEnd=${newPeriodEnd.toISOString()}`,
+      );
+
+      return this.toResponseDto(savedSubscription);
+    } catch (error: unknown) {
+      // Re-throw if it's already an HTTP exception
+      if (
+        error instanceof NotFoundException ||
+        error instanceof ConflictException
+      ) {
+        throw error;
+      }
+
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      this.logger.error(
+        `Failed to reactivate subscription: ${errorMessage}`,
+        errorStack,
+      );
+      throw new InternalServerErrorException(
+        'An error occurred while reactivating the subscription',
+      );
+    }
+  }
+
   private addOneMonth(date: Date): Date {
     const result = new Date(date);
     // Add one month, handling month boundaries correctly

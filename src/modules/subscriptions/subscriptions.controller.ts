@@ -96,4 +96,28 @@ export class SubscriptionsController {
   async findById(@Param('id') id: string): Promise<SubscriptionResponseDto> {
     return this.subscriptionsService.findById(id);
   }
+
+  @Post(':id/reactivate')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Reactivate a canceled subscription',
+    description:
+      'Reactivates a canceled subscription. Sets status to ACTIVE, records reactivatedAt timestamp, and starts a new billing period. Only CANCELED subscriptions can be reactivated.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Subscription reactivated successfully',
+    type: SubscriptionResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Subscription not found',
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Conflict - subscription is already active',
+  })
+  async reactivate(@Param('id') id: string): Promise<SubscriptionResponseDto> {
+    return this.subscriptionsService.reactivate(id);
+  }
 }
