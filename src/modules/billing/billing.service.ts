@@ -50,10 +50,10 @@ export class BillingService {
         'code' in error &&
         error.code === '23505'
       ) {
-        // For idempotency, we could either:
-        // 1. Return the existing record (fetch it)
-        // 2. Throw a conflict exception
-        // Per requirements, we throw ConflictException to signal the duplicate
+        // Design decision: For idempotency handling, we throw ConflictException rather than
+        // silently returning the existing record. This allows the caller (billing simulation service)
+        // to decide how to handle duplicates - either as expected idempotent behavior or as an error.
+        // The Billing Simulation PRD will define the exact caller-side behavior.
         this.logger.warn(
           `Duplicate billing event attempted: subscriptionId=${dto.subscriptionId}, period=${dto.periodStart.toISOString()} to ${dto.periodEnd.toISOString()}`,
         );
