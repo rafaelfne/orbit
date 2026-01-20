@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PlansModule } from './modules/plans/plans.module';
+import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
 import databaseConfig from './config/database.config';
 
 @Module({
@@ -16,6 +17,7 @@ import databaseConfig from './config/database.config';
       useFactory: () => databaseConfig(),
     }),
     PlansModule,
+    SubscriptionsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
