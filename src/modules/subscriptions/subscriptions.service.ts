@@ -178,6 +178,56 @@ export class SubscriptionsService {
     }
   }
 
+  async cancel(id: string): Promise<SubscriptionResponseDto> {
+    try {
+      // 1. Find subscription
+      const subscription = await this.subscriptionRepository.findOne({
+        where: { id },
+      });
+
+      if (!subscription) {
+        throw new NotFoundException(`Subscription with id ${id} not found`);
+      }
+
+      // 2. Check if already canceled
+      if (subscription.status === SubscriptionStatus.CANCELED) {
+        throw new ConflictException('Subscription is already canceled');
+      }
+
+      // 3. Update subscription to canceled
+      subscription.status = SubscriptionStatus.CANCELED;
+      subscription.canceledAt = new Date();
+
+      const updatedSubscription =
+        await this.subscriptionRepository.save(subscription);
+
+      this.logger.log(
+        `Subscription canceled: id=${updatedSubscription.id}, customerId=${updatedSubscription.customerId}, planId=${updatedSubscription.planId}, canceledAt=${updatedSubscription.canceledAt?.toISOString()}`,
+      );
+
+      return this.toResponseDto(updatedSubscription);
+    } catch (error: unknown) {
+      // Re-throw if it's already an HTTP exception
+      if (
+        error instanceof NotFoundException ||
+        error instanceof ConflictException
+      ) {
+        throw error;
+      }
+
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      this.logger.error(
+        `Failed to cancel subscription: ${errorMessage}`,
+        errorStack,
+      );
+      throw new InternalServerErrorException(
+        'An error occurred while canceling the subscription',
+      );
+    }
+  }
+
   async reactivate(id: string): Promise<SubscriptionResponseDto> {
     try {
       // 1. Find subscription
