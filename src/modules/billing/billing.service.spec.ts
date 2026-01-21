@@ -58,7 +58,7 @@ describe('BillingService', () => {
         paymentStatus: createDto.paymentStatus,
         createdAt: new Date(),
         updatedAt: new Date(),
-        subscription: null as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+        subscription: null as any,
       };
 
       jest
@@ -168,7 +168,7 @@ describe('BillingService', () => {
           paymentStatus: PaymentStatus.PAID,
           createdAt: new Date(),
           updatedAt: new Date(),
-          subscription: null as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+          subscription: null as any,
         },
         {
           id: 'billing-1',
@@ -180,7 +180,7 @@ describe('BillingService', () => {
           paymentStatus: PaymentStatus.PAID,
           createdAt: new Date(),
           updatedAt: new Date(),
-          subscription: null as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+          subscription: null as any,
         },
       ];
 
