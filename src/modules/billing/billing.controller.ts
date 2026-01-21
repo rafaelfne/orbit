@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Logger } from '@nestjs/common';
+import { Controller, Post, Body, Logger, HttpCode } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { BillingSimulationService } from './billing-simulation.service';
 import { SimulateBillingRequestDto } from './dto/simulate-billing-request.dto';
@@ -14,6 +14,7 @@ export class BillingController {
   ) {}
 
   @Post('simulate')
+  @HttpCode(200)
   @ApiOperation({
     summary: 'Simulate monthly billing',
     description:

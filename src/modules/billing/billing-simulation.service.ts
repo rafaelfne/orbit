@@ -13,8 +13,8 @@ import {
 import { Plan } from '../plans/plan.entity';
 import { PaymentStatus } from './billing-event.entity';
 import { BillingService } from './billing.service';
+import { SimulateBillingRequestDto } from './dto/simulate-billing-request.dto';
 import {
-  SimulateBillingRequestDto,
   SimulateBillingResponseDto,
   SubscriptionSimulationResultDto,
 } from './dto/simulate-billing-response.dto';
@@ -45,9 +45,8 @@ export class BillingSimulationService {
     );
 
     const subscriptions = await this.getEligibleSubscriptions(
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
       dto.subscriptionId,
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
+
       dto.maxSubscriptions ?? 100,
     );
 
@@ -58,9 +57,9 @@ export class BillingSimulationService {
     for (const subscription of subscriptions) {
       const result = await this.simulateForSubscription(
         subscription,
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
+
         dto.maxPeriodsPerSubscription ?? 12,
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
+
         dto.dryRun ?? false,
       );
 
