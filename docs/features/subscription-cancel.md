@@ -86,8 +86,61 @@ CANCELED → ACTIVE
 - ✅ Database schema supports cancellation (status, canceled_at, reactivated_at)
 - ✅ Uniqueness constraint allows multiple CANCELED subscriptions
 - ⏳ Cancel endpoint: Not implemented (separate PRD)
-- ⏳ Reactivate endpoint: Not implemented (separate PRD)
+- ✅ Reactivate endpoint: Implemented
 - ⏳ Billing simulation: Not implemented (separate PRD)
+
+## Reactivate Subscription Endpoint
+
+### Endpoint
+- **Method**: `POST /subscriptions/:id/reactivate`
+- **Status**: 200 OK
+- **Effect**: Sets status to ACTIVE, records reactivated_at timestamp, starts new period
+
+### Behavior
+1. Lookup subscription by `id`
+   - If not found: `404 Not Found`
+
+2. State transition rules
+   - If current `status == CANCELED`:
+     - Set `status = ACTIVE`
+     - Set `reactivated_at = now()` (UTC)
+     - Set `current_period_start = now()` (UTC)
+     - Set `current_period_end = current_period_start + 1 month`
+     - Do NOT change:
+       - start_date (preserved for audit)
+       - plan_id
+       - customer_id
+       - canceled_at (preserved for audit)
+   - If current `status == ACTIVE`:
+     - Return `409 Conflict` (already active)
+     - Do not modify the record
+
+3. Response
+   - Status: `200 OK`
+   - Body: Subscription object (same schema as GET /subscriptions/:id), including:
+     - persisted `status` (ACTIVE)
+     - `computedStatus` (expected ACTIVE immediately after reactivation)
+     - updated period fields
+
+### Error Handling
+- `404` if subscription not found
+- `409` if subscription is already active
+
+### Logging
+Reactivation is logged at INFO level with non-sensitive fields:
+- subscriptionId, customerId, planId, reactivatedAt, periodStart, periodEnd
+
+### Testing
+- Unit tests verify:
+  - Reactivates CANCELED subscription correctly
+  - Returns 409 for ACTIVE subscription
+  - Returns 404 for non-existent subscription
+  - Handles database errors appropriately
+- E2E tests verify:
+  - Reactivation via API endpoint
+  - Period fields reset correctly
+  - canceledAt remains unchanged
+  - OpenAPI documentation includes endpoint
 
 ## Notes
 This policy is documented now to ensure consistency in schema design and future implementation. It may be revised based on business requirements before the cancel/reactivate endpoints are implemented.

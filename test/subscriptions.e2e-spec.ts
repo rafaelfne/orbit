@@ -529,4 +529,113 @@ describe('Subscriptions (e2e)', () => {
       expect(subscription.canceledAt).not.toBeNull();
     });
   });
+
+  describe('POST /subscriptions/:id/reactivate', () => {
+    let subscriptionId: string;
+
+    beforeEach(async () => {
+      // Create a test plan
+      const planResponse = await request(app.getHttpServer())
+        .post('/plans')
+        .send({
+          name: 'Test Plan',
+          priceCents: 9900,
+          currency: 'USD',
+        })
+        .expect(201);
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+      testPlanId = planResponse.body.id;
+
+      // Create a subscription
+      const subResponse = await request(app.getHttpServer())
+        .post('/subscriptions')
+        .send({
+          planId: testPlanId,
+          customerId: 'customer-reactivate',
+        })
+        .expect(201);
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+      subscriptionId = subResponse.body.id;
+
+      // Cancel the subscription by updating it directly in the database
+      await dataSource.query(
+        `UPDATE subscriptions SET status = 'CANCELED', canceled_at = $1 WHERE id = $2`,
+        [new Date(), subscriptionId],
+      );
+    });
+
+    it('should reactivate a canceled subscription', async () => {
+      // Verify subscription is canceled
+      let response = await request(app.getHttpServer())
+        .get(`/subscriptions/${subscriptionId}`)
+        .expect(200);
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      let subscription: SubscriptionResponse = response.body;
+      expect(subscription.status).toBe('CANCELED');
+      expect(subscription.computedStatus).toBe('CANCELED');
+
+      // Reactivate the subscription
+      response = await request(app.getHttpServer())
+        .post(`/subscriptions/${subscriptionId}/reactivate`)
+        .expect(200);
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      subscription = response.body;
+
+      expect(subscription.id).toBe(subscriptionId);
+      expect(subscription.status).toBe('ACTIVE');
+      expect(subscription.computedStatus).toBe('ACTIVE');
+      expect(subscription.reactivatedAt).toBeDefined();
+      expect(subscription.reactivatedAt).not.toBeNull();
+      expect(subscription.canceledAt).toBeDefined();
+      expect(subscription.canceledAt).not.toBeNull(); // Should remain set
+
+      // Verify new period was created
+      if (!subscription.reactivatedAt) {
+        throw new Error('reactivatedAt should not be null');
+      }
+      const reactivatedAt = new Date(subscription.reactivatedAt);
+      const periodStart = new Date(subscription.currentPeriodStart);
+      const periodEnd = new Date(subscription.currentPeriodEnd);
+
+      // Period start should be approximately the reactivation time
+      expect(
+        Math.abs(periodStart.getTime() - reactivatedAt.getTime()),
+      ).toBeLessThan(1000); // Within 1 second
+
+      // Period end should be approximately one month after period start
+      const expectedEndTime = new Date(periodStart);
+      expectedEndTime.setMonth(expectedEndTime.getMonth() + 1);
+      expect(
+        Math.abs(periodEnd.getTime() - expectedEndTime.getTime()),
+      ).toBeLessThan(86400000); // Within 1 day (to handle timezone differences)
+    });
+
+    it('should return 409 when reactivating an already active subscription', async () => {
+      // First reactivation
+      await request(app.getHttpServer())
+        .post(`/subscriptions/${subscriptionId}/reactivate`)
+        .expect(200);
+
+      // Second reactivation should fail
+      const response = await request(app.getHttpServer())
+        .post(`/subscriptions/${subscriptionId}/reactivate`)
+        .expect(409);
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      expect(response.body.message).toContain('already active');
+    });
+
+    it('should return 404 when reactivating non-existent subscription', async () => {
+      const response = await request(app.getHttpServer())
+        .post('/subscriptions/00000000-0000-0000-0000-000000000000/reactivate')
+        .expect(404);
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      expect(response.body.message).toContain('not found');
+    });
+  });
 });
