@@ -30,7 +30,12 @@ async function bootstrap() {
     res.json(document);
   });
 
-  app.enableCors();
+  app.enableCors({
+    origin: '*',
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    preflightContinue: false,
+    optionsSuccessStatus: 204,
+  });
 
   // Serve Scalar API documentation
   app.use(
