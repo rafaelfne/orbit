@@ -2,6 +2,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { BillingService } from '../src/modules/billing/billing.service';
 import { PaymentStatus } from '../src/modules/billing/billing-event.entity';
@@ -316,6 +317,314 @@ describe('Billing (e2e)', () => {
       );
 
       expect(hasSubPeriodIndex).toBe(true);
+    });
+  });
+
+  describe('POST /billing/simulate', () => {
+    it('should simulate billing for a single subscription', async () => {
+      // Create a subscription with period that ended 2 months ago
+      const now = new Date();
+      const twoMonthsAgo = new Date(now);
+      twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+      const oneMonthAgo = new Date(now);
+      oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+
+      const subResult = await dataSource.query(
+        `INSERT INTO subscriptions (plan_id, customer_id, status, start_date, current_period_start, current_period_end) 
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+        [
+          testPlanId,
+          'customer-sim-test',
+          'ACTIVE',
+          twoMonthsAgo,
+          twoMonthsAgo,
+          oneMonthAgo,
+        ],
+      );
+
+      const subId = subResult[0].id;
+
+      const response = await request(app.getHttpServer())
+        .post('/billing/simulate')
+        .send({
+          subscriptionId: subId,
+          maxPeriodsPerSubscription: 12,
+          dryRun: false,
+        })
+        .expect(200);
+
+      expect(response.body.processedSubscriptions).toBe(1);
+      expect(response.body.createdBillingRecords).toBeGreaterThanOrEqual(1);
+      expect(response.body.results).toHaveLength(1);
+      expect(response.body.results[0].subscriptionId).toBe(subId);
+      expect(response.body.results[0].periodsProcessed).toBeGreaterThanOrEqual(
+        1,
+      );
+
+      // Verify billing events were created
+      const billingEvents = await dataSource.query(
+        `SELECT * FROM billing_events WHERE subscription_id = $1 ORDER BY period_end ASC`,
+        [subId],
+      );
+
+      expect(billingEvents.length).toBeGreaterThanOrEqual(1);
+      expect(billingEvents[0].amount_cents).toBe(9900);
+      expect(billingEvents[0].currency).toBe('USD');
+      expect(billingEvents[0].payment_status).toBe('PAID');
+
+      // Verify subscription period was advanced
+      const updatedSub = await dataSource.query(
+        `SELECT current_period_start, current_period_end FROM subscriptions WHERE id = $1`,
+        [subId],
+      );
+
+      expect(updatedSub[0].current_period_end).toBeDefined();
+      const periodEnd = new Date(updatedSub[0].current_period_end);
+      expect(periodEnd.getTime()).toBeGreaterThan(now.getTime());
+    });
+
+    it('should be idempotent - rerunning does not create duplicates', async () => {
+      // Create a subscription with period that ended 1 month ago
+      const now = new Date();
+      const oneMonthAgo = new Date(now);
+      oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+      const twoMonthsAgo = new Date(now);
+      twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+
+      const subResult = await dataSource.query(
+        `INSERT INTO subscriptions (plan_id, customer_id, status, start_date, current_period_start, current_period_end) 
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+        [
+          testPlanId,
+          'customer-idempotency-test',
+          'ACTIVE',
+          twoMonthsAgo,
+          twoMonthsAgo,
+          oneMonthAgo,
+        ],
+      );
+
+      const subId = subResult[0].id;
+
+      // Run simulation first time
+      await request(app.getHttpServer())
+        .post('/billing/simulate')
+        .send({
+          subscriptionId: subId,
+          maxPeriodsPerSubscription: 12,
+          dryRun: false,
+        })
+        .expect(200);
+
+      // Count billing events after first run
+      const billingEventsAfterFirst = await dataSource.query(
+        `SELECT COUNT(*) as count FROM billing_events WHERE subscription_id = $1`,
+        [subId],
+      );
+      const countAfterFirst = parseInt(
+        billingEventsAfterFirst[0].count as string,
+        10,
+      );
+
+      // Run simulation second time (idempotency test)
+      const response2 = await request(app.getHttpServer())
+        .post('/billing/simulate')
+        .send({
+          subscriptionId: subId,
+          maxPeriodsPerSubscription: 12,
+          dryRun: false,
+        })
+        .expect(200);
+
+      // Second run should create 0 new billing records (idempotent)
+      expect(response2.body.createdBillingRecords).toBe(0);
+
+      // Count billing events after second run
+      const billingEventsAfterSecond = await dataSource.query(
+        `SELECT COUNT(*) as count FROM billing_events WHERE subscription_id = $1`,
+        [subId],
+      );
+      const countAfterSecond = parseInt(
+        billingEventsAfterSecond[0].count as string,
+        10,
+      );
+
+      // Should have same count (no duplicates)
+      expect(countAfterSecond).toBe(countAfterFirst);
+    });
+
+    it('should skip CANCELED subscriptions', async () => {
+      // Create a canceled subscription
+      const now = new Date();
+      const oneMonthAgo = new Date(now);
+      oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+      const twoMonthsAgo = new Date(now);
+      twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+
+      const subResult = await dataSource.query(
+        `INSERT INTO subscriptions (plan_id, customer_id, status, start_date, current_period_start, current_period_end, canceled_at) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+        [
+          testPlanId,
+          'customer-canceled-test',
+          'CANCELED',
+          twoMonthsAgo,
+          twoMonthsAgo,
+          oneMonthAgo,
+          now,
+        ],
+      );
+
+      const subId = subResult[0].id;
+
+      const response = await request(app.getHttpServer())
+        .post('/billing/simulate')
+        .send({
+          subscriptionId: subId,
+          maxPeriodsPerSubscription: 12,
+          dryRun: false,
+        })
+        .expect(200);
+
+      // Should process 0 subscriptions (canceled)
+      expect(response.body.processedSubscriptions).toBe(0);
+      expect(response.body.createdBillingRecords).toBe(0);
+      expect(response.body.results).toHaveLength(0);
+    });
+
+    it('should handle dry run mode without creating records', async () => {
+      // Create a subscription with period that ended 1 month ago
+      const now = new Date();
+      const oneMonthAgo = new Date(now);
+      oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+      const twoMonthsAgo = new Date(now);
+      twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+
+      const subResult = await dataSource.query(
+        `INSERT INTO subscriptions (plan_id, customer_id, status, start_date, current_period_start, current_period_end) 
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+        [
+          testPlanId,
+          'customer-dryrun-test',
+          'ACTIVE',
+          twoMonthsAgo,
+          twoMonthsAgo,
+          oneMonthAgo,
+        ],
+      );
+
+      const subId = subResult[0].id;
+
+      const response = await request(app.getHttpServer())
+        .post('/billing/simulate')
+        .send({
+          subscriptionId: subId,
+          maxPeriodsPerSubscription: 12,
+          dryRun: true,
+        })
+        .expect(200);
+
+      expect(response.body.processedSubscriptions).toBe(1);
+      expect(response.body.results[0].periodsProcessed).toBeGreaterThanOrEqual(
+        1,
+      );
+
+      // Verify NO billing events were created (dry run)
+      const billingEvents = await dataSource.query(
+        `SELECT COUNT(*) as count FROM billing_events WHERE subscription_id = $1`,
+        [subId],
+      );
+      const count = parseInt(billingEvents[0].count as string, 10);
+      expect(count).toBe(0);
+
+      // Verify subscription period was NOT updated (dry run)
+      const updatedSub = await dataSource.query(
+        `SELECT current_period_start, current_period_end FROM subscriptions WHERE id = $1`,
+        [subId],
+      );
+
+      expect(new Date(updatedSub[0].current_period_end).getTime()).toBe(
+        oneMonthAgo.getTime(),
+      );
+    });
+
+    it('should return 404 for non-existent subscription', async () => {
+      await request(app.getHttpServer())
+        .post('/billing/simulate')
+        .send({
+          subscriptionId: '00000000-0000-0000-0000-000000000000',
+          maxPeriodsPerSubscription: 12,
+          dryRun: false,
+        })
+        .expect(404);
+    });
+
+    it('should process multiple subscriptions when subscriptionId is not provided', async () => {
+      // Create multiple subscriptions with elapsed periods
+      const now = new Date();
+      const oneMonthAgo = new Date(now);
+      oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+      const twoMonthsAgo = new Date(now);
+      twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+
+      await dataSource.query(
+        `INSERT INTO subscriptions (plan_id, customer_id, status, start_date, current_period_start, current_period_end) 
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          testPlanId,
+          'customer-batch-1',
+          'ACTIVE',
+          twoMonthsAgo,
+          twoMonthsAgo,
+          oneMonthAgo,
+        ],
+      );
+
+      await dataSource.query(
+        `INSERT INTO subscriptions (plan_id, customer_id, status, start_date, current_period_start, current_period_end) 
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          testPlanId,
+          'customer-batch-2',
+          'ACTIVE',
+          twoMonthsAgo,
+          twoMonthsAgo,
+          oneMonthAgo,
+        ],
+      );
+
+      const response = await request(app.getHttpServer())
+        .post('/billing/simulate')
+        .send({
+          maxSubscriptions: 100,
+          maxPeriodsPerSubscription: 12,
+          dryRun: true,
+        })
+        .expect(200);
+
+      // Should process at least the 2 subscriptions we created
+      expect(response.body.processedSubscriptions).toBeGreaterThanOrEqual(2);
+      expect(response.body.results.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('should validate request DTO', async () => {
+      // Invalid maxPeriodsPerSubscription (too high)
+      await request(app.getHttpServer())
+        .post('/billing/simulate')
+        .send({
+          maxPeriodsPerSubscription: 100, // max is 60
+          dryRun: false,
+        })
+        .expect(400);
+
+      // Invalid maxSubscriptions (too low)
+      await request(app.getHttpServer())
+        .post('/billing/simulate')
+        .send({
+          maxSubscriptions: 0, // min is 1
+          dryRun: false,
+        })
+        .expect(400);
     });
   });
 });
