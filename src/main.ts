@@ -30,6 +30,8 @@ async function bootstrap() {
     res.json(document);
   });
 
+  app.enableCors();
+
   // Serve Scalar API documentation
   app.use(
     '/docs',
